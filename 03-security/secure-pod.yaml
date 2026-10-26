@@ -7,6 +7,8 @@ metadata:
 spec:
   securityContext:
     runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: secure-container
       image: busybox
