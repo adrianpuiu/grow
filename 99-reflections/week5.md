@@ -1,78 +1,49 @@
 # 📓 Week 5 Reflection — Working with Persistent Storage
 
-In Week 5 of the GROW program, you explored how to bind persistent storage to a Kubernetes workload using a PersistentVolumeClaim (PVC). This week focused on stateful applications and storage durability.
-
 ---
 
 ## ✅ What I Learned
 
-Reflect on what new concepts or tools you discovered this week. Some prompts to consider:
-
-- 
-- 
-- 
-
-_Example:_
-> I learned that PVCs allow pods to retain data even after restarts. I also realized that `ReadWriteOnce` only allows one pod to mount the volume at a time.
-
+- The storage trinity: **StorageClass** (provisions disks on demand) → **PVC** (my request: "1Gi") → **PV** (a real directory on the node's disk, named after the PVC).
+- `WaitForFirstConsumer`: the PVC sat `Pending` — *by design* — until the Postgres Pod actually used it, so the volume could be created on the Pod's node. The event text said exactly this.
+- **State lives on the volume, not the Pod.** I wrote a row into Postgres, deleted the Pod, and queried the row from its replacement (different pod hash, same data). The PV directory was visible on the node at `/var/local-path-provisioner/pvc-…`.
+- `POSTGRES_PASSWORD` is **init-time-only**: Postgres ignores it when the data directory already exists. Changing the env later does nothing without wiping the PVC.
+- Secret `data` is **base64, not encryption** — one `kubectl get secret -o jsonpath` + `base64 -d` away from plaintext. The win is git-safety, RBAC separation, and rotation, not confidentiality.
 
 ---
 
+## ❌ What Was Challenging
 
-## ❓ What Was Challenging
-
-Think about what tripped you up or took extra time to understand.
-
-_Example:_
-> I had trouble understanding the lifecycle of a PVC and what happens when I delete the pod. I also wasn’t sure how to check if the volume was really mounted.
-
+The lab bonus detonated for real: I scaled Postgres to 2 replicas and got **two live database servers on the same data directory** — each running crash-recovery against the other's WAL. Not a crash-loop, not an error: **green checkmarks over silent corruption**. The trap: `ReadWriteOnce` means once per **node**, not once per Pod — and on a single-node kind cluster, both Pods mount it happily. A Deployment coordinates replicas, *not storage*. That's the exact problem StatefulSets solve (stable identity + one volume per replica).
 
 ---
-
 
 ## 🔍 Commands I Practiced
 
 ```bash
-
+kubectl apply -f postgres-pvc.yaml && kubectl describe pvc postgres-pvc   # watch Pending → Bound
+kubectl exec deploy/postgres -- psql -U postgres -c "CREATE TABLE lessons ...; INSERT ..."
+kubectl delete pod -l app=postgres && kubectl exec deploy/postgres -- psql -U postgres -c "SELECT * FROM lessons;"
+kubectl logs <new-pod>     # "database system was not properly shut down; automatic recovery"
+kubectl scale deployment postgres --replicas=2   # ...then back to 1, fast
 ```
 
 ---
 
 ## 💡 Real-World Takeaways
 
-Would this apply in a real job or DevOps situation? Why or why not?
-
-*Example:*
-
-> I now understand how to run a database inside a Kubernetes deploymnet with data that persists. Is this essential for production environments like running PostgreSQL or Redis?
-
+- Nearly every stateful workload needs `StatefulSet`, not `Deployment` — now I've seen the failure mode that justifies it.
+- Secrets in plain env vars are readable by anyone with `kubectl get` and live in git history forever. The proper fix (homework): `secretKeyRef` + PVC-wipe caveats on rotation.
 
 ---
-
 
 ## 📣 What I Shared
 
-Did you post anything on LinkedIn or BlueSky?
-
-
-Paste the link or describe what you shared below:
-
-✅ Shared a screenshot of my PVC running on LinkedIn with #GROWportfolio  
-
+Not yet posted — the two-postgres corruption story is the one worth sharing (screenshots of green pods + recovery logs).
 
 ---
-
 
 ## 🧠 Questions I Still Have
 
-Don’t hold back—ask anything you’re still curious or confused about.
-
-*Example:*
-
-> How do I use a StatefulSet for PostgreSQL instead of a Deployment?
-> What happens if the node storing the PVC fails?
-
----
-
-Keep pushing! You're building more than YAML—you’re building proof of your skills.
-
+- How do `volumeClaimTemplates` in a StatefulSet keep one PVC per replica, and what happens on scale-down?
+- What does `reclaimPolicy: Delete` vs `Retain` mean when a PVC is removed?
