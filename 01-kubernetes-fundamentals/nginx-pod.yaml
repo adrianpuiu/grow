@@ -10,3 +10,6 @@ spec:
       image: nginxinc/nginx-unprivileged:stable
       ports:
         - containerPort: 80
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
