@@ -1,29 +1,27 @@
-# ---------- PATH ----------
-export PATH="$HOME/.local/bin:$PATH"
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+# ══ GROW Lesson 06 — Shell DX starter (.zshrc) — Ubuntu-adapted from the brew guide ══
 
-# ---------- Prompt ----------
-eval "$(starship init zsh)"
+# ── History (Part 1) ──
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=10000000
+SAVEHIST=10000000
+setopt BANG_HIST                 # treat '!' specially during expansion
+setopt EXTENDED_HISTORY          # ":start:elapsed;command" format
+setopt INC_APPEND_HISTORY        # write history immediately, not at exit
+setopt SHARE_HISTORY             # share history across sessions
+setopt HIST_EXPIRE_DUPS_FIRST    # trim duplicates first
 
-# ---------- Atuin (history) ----------
-eval "$(atuin init zsh --disable-up-arrow)"
-
-# ---------- Completion ----------
+# ── Completion (Part 3 — load BEFORE plugins/highlighting) ──
 autoload -U compinit; compinit
 source <(kubectl completion zsh)
 compdef _kubectl k
 
-# ---------- Oh My Zsh ----------
-export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="robbyrussell"   # prompt theme is mostly handled by starship; this is harmless
-plugins=(git kubectl kubectx dirhistory)
-source $ZSH/oh-my-zsh.sh
+[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ] && \
+  source /usr/share/doc/fzf/examples/key-bindings.zsh   # Ctrl-R fuzzy history (fzf)
 
-# ---------- Autosuggest & Highlight ----------
-source "$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
-source "$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" # keep LAST
+# ── krew plugins (Part 4) ──
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
-# ---------- Aliases ----------
+# ── Aliases: cut keystrokes, keep intent (Part 3) ──
 alias k='kubectl'
 alias kg='kubectl get'
 alias kd='kubectl describe'
@@ -36,20 +34,14 @@ alias kctx='kubectx'
 alias kns='kubens'
 alias kap='kubectl apply -f'
 alias kdry='kubectl -o yaml --dry-run=client'
+alias bat='batcat'               # Ubuntu names the binary batcat
 
-# human-friendly pager
-command -v bat >/dev/null || alias bat='cat'
+# ── Editor for kubectl edit (Part 5) ──
+export KUBE_EDITOR="${KUBE_EDITOR:-nano}"
 
-# ---------- Editor & Kubeconfigs ----------
-export KUBE_EDITOR=nvim
-export KUBECONFIG="$HOME/.kube/config"
+# ── Prompt awareness (Part 2 — shows cluster/namespace, prevents wrong-cluster mistakes) ──
+eval "$(${HOME}/.local/bin/starship init zsh)"
 
-# ---------- Helpful funcs ----------
-# Explain with field paths, piped through pager
-ke() { kubectl explain "$@" --recursive | ${PAGER:-less}; }
-
-# Grep resources by label quickly
-kgl() { kubectl get "$1" -l "$2" -o wide; }
-
-# Current k8s context/namespace at a glance
-kc() { kubectl config view --minify -o jsonpath='{.contexts[0].name}{" "}{.contexts[0].context.namespace}{"\n"}'; }
+# ── Autosuggestions & syntax highlighting (Part 3 — syntax highlighting MUST load LAST) ──
+source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
